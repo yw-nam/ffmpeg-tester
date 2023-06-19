@@ -12,11 +12,6 @@ import (
 var inputFile string = "input.mp4"
 var inputDir string = "./testdata"
 
-var caseSample map[string]string = map[string]string{
-	"sample_01": "-i %s -c:v libx264 -preset fast -an %s",
-	"sample_02": "-i %s -c:v libx264 -preset fast -an %s",
-}
-
 func swOptFmt(bitrate int) string {
 	return fmt.Sprintf("-y -i %%s -c:v libx264 -b:v %dM -maxrate:v %dM -minrate:v %dM -bufsize %dM -x264-params nal_hrd=cbr -c:a aac -b:a 96k  -movflags faststart %%s", bitrate, bitrate, bitrate, bitrate*2)
 }
@@ -28,7 +23,7 @@ func hwOptFmt(bitrate int, gpuId int) string {
 type testCase struct {
 	gpuNum  int
 	bitrate int
-	howMany int
+	setNum  int
 }
 
 func (tc *testCase) getTitle() string {
@@ -36,27 +31,27 @@ func (tc *testCase) getTitle() string {
 	if tc.gpuNum > 0 {
 		lib = "h264_nvenc"
 	}
-	return fmt.Sprintf("%s_%dM_%dea", lib, tc.bitrate, tc.howMany)
+	return fmt.Sprintf("%s_%dM_%dea", lib, tc.bitrate, tc.setNum)
 }
 
 func makeCases() []testCase {
 	result := []testCase{}
 	for _, bitrate := range []int{1, 2, 4} {
 		for _, gpuNum := range []int{0, 1, 2} {
-			howManyArr := []int{}
+			setNums := []int{}
 			switch gpuNum {
 			case 0:
-				howManyArr = []int{1, 2, 4}
+				setNums = []int{1, 2, 4}
 			case 1:
-				howManyArr = []int{1, 2, 4, 8, 16}
+				setNums = []int{1, 2, 4, 8, 16}
 			case 2:
-				howManyArr = []int{8, 16}
+				setNums = []int{8, 16}
 			}
-			for _, howMany := range howManyArr {
+			for _, setNum := range setNums {
 				tc := testCase{
 					bitrate: bitrate,
 					gpuNum:  gpuNum,
-					howMany: howMany,
+					setNum:  setNum,
 				}
 				result = append(result, tc)
 			}
@@ -70,7 +65,9 @@ func main() {
 	fmt.Printf(">> start with %s/%s\n", inputDir, inputFile)
 	originalStdOut := os.Stdout
 	makeOutputDir()
-	// changeStdOut()
+	if resultFile, err := changeStdOut(); err != nil {
+		defer resultFile.Close()
+	}
 
 	testCases := makeCases()
 	for _, cases := range testCases {
@@ -83,23 +80,26 @@ func main() {
 }
 
 func runCases(tc testCase) {
-	var wg sync.WaitGroup
-	caseName := tc.getTitle()
-	optFmts := []string{}
+	fmt.Printf("\n--- setNum:%d / bitRate:%d / gpuNum:%d ----------------------------\n", tc.setNum, tc.bitrate, tc.gpuNum)
 
-	for i := 0; i < tc.howMany; i++ {
+	caseName := tc.getTitle()
+	optFmts := map[string]string{}
+	for i := 0; i < tc.setNum; i++ {
 		if tc.gpuNum == 0 {
-			optFmts = append(optFmts, swOptFmt(tc.bitrate))
+			optFmt := swOptFmt(tc.bitrate)
+			outputFile := fmt.Sprintf("./output/%s_%02d.mp4", caseName, i)
+			optFmts[outputFile] = fmt.Sprintf(optFmt, inputFile, outputFile)
 		} else {
-			gpuId := i % 2
-			optFmts = append(optFmts, hwOptFmt(tc.bitrate, gpuId))
+			gpuId := i % tc.gpuNum
+			optFmt := hwOptFmt(tc.bitrate, gpuId)
+			outputFile := fmt.Sprintf("./output/%s_%02d_gpu%d-%d.mp4", caseName, i, tc.gpuNum, gpuId)
+			optFmts[outputFile] = fmt.Sprintf(optFmt, inputFile, outputFile)
 		}
 	}
 
-	for _, optFmt := range optFmts {
+	var wg sync.WaitGroup
+	for outputFile, option := range optFmts {
 		wg.Add(1)
-		outputFile := fmt.Sprintf("./output/output_%s.mp4", caseName)
-		option := fmt.Sprintf(optFmt, inputFile, outputFile)
 		go encoding(option, outputFile, &wg)
 	}
 	wg.Wait()
@@ -135,12 +135,12 @@ func makeOutputDir() {
 	os.Mkdir("output", 0777)
 }
 
-func changeStdOut() {
+func changeStdOut() (*os.File, error) {
 	resultFilePath := fmt.Sprintf("./output/result_%s.txt", time.Now().Format("0102_150405"))
 	if resultFile, err := os.Create(resultFilePath); err != nil {
-		fmt.Println(err)
+		return nil, err
 	} else {
-		defer resultFile.Close()
 		os.Stdout = resultFile
+		return resultFile, nil
 	}
 }
