@@ -5,17 +5,19 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
 )
 
-var inputFile string = "input.mp4"
 var inputDir string = "./testdata"
-var outputDir string = "output"
+
+var bitRateToInputFile map[int]string = map[int]string{
+	1: "720p-EARTH.mp4",
+	2: "1080p-birds.mp4",
+	4: "2160p-color.mp4",
+}
 
 func swOptFmt(bitrate int) string {
 	return fmt.Sprintf("-y -i %%s -c:v libx264 -b:v %dM -maxrate:v %dM -minrate:v %dM -bufsize %dM -x264-params nal_hrd=cbr -c:a aac -b:a 96k -movflags faststart %%s", bitrate, bitrate, bitrate, bitrate*2)
@@ -65,18 +67,27 @@ func makeCases() []testCase {
 	return result
 }
 
+func getOutPutDir(inputFile string) string {
+	fileName := strings.Split(inputFile, ".")
+	return fmt.Sprintf("output_%s", fileName[0])
+}
+
+func makeOutputDirs() {
+	for _, inputFile := range bitRateToInputFile {
+		outputDir := getOutPutDir(inputFile)
+		removeAll(outputDir)
+		os.Mkdir(outputDir, 0777)
+	}
+}
+
 func main() {
 	readFlag()
-	fmt.Printf(">> start with %s/%s\n", inputDir, inputFile)
-	originalStdOut := os.Stdout
-
-	strs := strings.Split(inputFile, ".")
-	outputDir = fmt.Sprintf("%s_%s", outputDir, strs[0])
 	if err := os.Chdir(inputDir); err != nil {
 		log.Fatal("Error changing directory:", err)
 	}
-	os.Mkdir(outputDir, 0777)
+	makeOutputDirs()
 
+	originalStdOut := os.Stdout
 	if resultFile, err := changeStdOut(); err != nil {
 		defer resultFile.Close()
 	}
@@ -95,16 +106,18 @@ func runCases(tc testCase) {
 	fmt.Printf("\n--- setNum:%d / bitRate:%d / gpuNum:%d ----------------------------\n", tc.setNum, tc.bitrate, tc.gpuNum)
 
 	caseName := tc.getTitle()
+	inputFile := bitRateToInputFile[tc.bitrate]
+	outputDir := getOutPutDir(inputFile)
 	optFmts := map[string]string{}
 	for i := 0; i < tc.setNum; i++ {
 		if tc.gpuNum == 0 {
 			optFmt := swOptFmt(tc.bitrate)
-			outputFile := fmt.Sprintf("./%s/%s/%02d.mp4", outputDir, caseName, i)
+			outputFile := fmt.Sprintf("./%s/%s_%02d.mp4", outputDir, caseName, i)
 			optFmts[outputFile] = fmt.Sprintf(optFmt, inputFile, outputFile)
 		} else {
 			gpuId := i % tc.gpuNum
 			optFmt := hwOptFmt(tc.bitrate, gpuId)
-			outputFile := fmt.Sprintf("./%s/%s_%dgpu/%02d.mp4", outputDir, caseName, tc.gpuNum, i)
+			outputFile := fmt.Sprintf("./%s/%s_%dgpu_%02d.mp4", outputDir, caseName, tc.gpuNum, i)
 			optFmts[outputFile] = fmt.Sprintf(optFmt, inputFile, outputFile)
 		}
 	}
@@ -122,44 +135,32 @@ func runCases(tc testCase) {
 func encoding(option string, outputFile string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	dirName := getOutputDir(outputFile)
-	removeAll(dirName)
-	os.Mkdir(dirName, 0777)
-
 	log.Println(option)
 
 	start := time.Now()
-	cmd := exec.Command("ffmpeg", strings.Split(option, " ")...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Printf("Command failed with error: %s\n", err)
-		log.Fatalf("Output:\n%s", string(output))
-	}
+	// cmd := exec.Command("ffmpeg", strings.Split(option, " ")...)
+	// output, err := cmd.CombinedOutput()
+	// if err != nil {
+	// 	log.Printf("Command failed with error: %s\n", err)
+	// 	log.Fatalf("Output:\n%s", string(output))
+	// }
 	fmt.Printf("done[%s]: %v\n", outputFile, time.Since(start))
 }
 
 func readFlag() {
 	inputDirFlag := flag.String("input_dir", "./testdata", "-input_dir=./testdata")
-	inputFileFlag := flag.String("input_file", "input.mp4", "-input_file=input.mp4")
 	flag.Parse()
-	inputFile = *inputFileFlag
 	inputDir = *inputDirFlag
 }
 
 func changeStdOut() (*os.File, error) {
-	resultFilePath := fmt.Sprintf("./%s/result_%s.txt", outputDir, time.Now().Format("0102_150405"))
+	resultFilePath := fmt.Sprintf("./result_%s.txt", time.Now().Format("0102_150405"))
 	if resultFile, err := os.Create(resultFilePath); err != nil {
 		return nil, err
 	} else {
 		os.Stdout = resultFile
 		return resultFile, nil
 	}
-}
-
-func getOutputDir(fullPath string) string {
-	re := regexp.MustCompile(`^(.*)\/\d+.mp4$`)
-	match := re.FindStringSubmatch(fullPath)
-	return match[1]
 }
 
 func removeAll(path string) error {

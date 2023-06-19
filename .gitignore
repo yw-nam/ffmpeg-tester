@@ -2,5 +2,6 @@
 __debug*
 *.out
 *.mp4
-output
+output_*
+result_*
 
