@@ -110,11 +110,13 @@ func runCases(tc testCase) {
 	}
 
 	var wg sync.WaitGroup
+	start := time.Now()
 	for outputFile, option := range optFmts {
 		wg.Add(1)
 		go encoding(option, outputFile, &wg)
 	}
 	wg.Wait()
+	fmt.Printf(">> set done: %s\n", time.Since(start))
 }
 
 func encoding(option string, outputFile string, wg *sync.WaitGroup) {
