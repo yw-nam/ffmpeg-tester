@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -31,7 +35,7 @@ func (tc *testCase) getTitle() string {
 	if tc.gpuNum > 0 {
 		lib = "h264_nvenc"
 	}
-	return fmt.Sprintf("%s_%dM_%dea", lib, tc.bitrate, tc.setNum)
+	return fmt.Sprintf("%s_%dM_%02dea", lib, tc.bitrate, tc.setNum)
 }
 
 func makeCases() []testCase {
@@ -62,9 +66,15 @@ func makeCases() []testCase {
 
 func main() {
 	readFlag()
+
+	if err := os.Chdir(inputDir); err != nil {
+		log.Fatal("Error changing directory:", err)
+	}
+	os.Mkdir("output", 0777)
+
 	fmt.Printf(">> start with %s/%s\n", inputDir, inputFile)
 	originalStdOut := os.Stdout
-	makeOutputDir()
+
 	if resultFile, err := changeStdOut(); err != nil {
 		defer resultFile.Close()
 	}
@@ -87,12 +97,12 @@ func runCases(tc testCase) {
 	for i := 0; i < tc.setNum; i++ {
 		if tc.gpuNum == 0 {
 			optFmt := swOptFmt(tc.bitrate)
-			outputFile := fmt.Sprintf("./output/%s_%02d.mp4", caseName, i)
+			outputFile := fmt.Sprintf("./output/%s/%02d.mp4", caseName, i)
 			optFmts[outputFile] = fmt.Sprintf(optFmt, inputFile, outputFile)
 		} else {
 			gpuId := i % tc.gpuNum
 			optFmt := hwOptFmt(tc.bitrate, gpuId)
-			outputFile := fmt.Sprintf("./output/%s_%02d_gpu%d-%d.mp4", caseName, i, tc.gpuNum, gpuId)
+			outputFile := fmt.Sprintf("./output/%s_%dgpu/%02d.mp4", caseName, tc.gpuNum+1, i)
 			optFmts[outputFile] = fmt.Sprintf(optFmt, inputFile, outputFile)
 		}
 	}
@@ -107,16 +117,17 @@ func runCases(tc testCase) {
 
 func encoding(option string, outputFile string, wg *sync.WaitGroup) {
 	defer wg.Done()
-	os.Remove(outputFile)
+
+	dirName := getOutputDir(outputFile)
+	removeAll(dirName)
+	os.Mkdir(dirName, 0777)
 
 	start := time.Now()
 
-	// TODO 일단 출력만!!!!!!>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 파일 이름이나 경로 바꿔줘야 함!!!!!!
-	fmt.Println(option)
-	// cmd := exec.Command("ffmpeg", strings.Split(option, " ")...)
-	// if err := cmd.Run(); err != nil {
-	// 	log.Fatal(err)
-	// }
+	cmd := exec.Command("ffmpeg", strings.Split(option, " ")...)
+	if err := cmd.Run(); err != nil {
+		log.Fatal(err)
+	}
 	fmt.Printf("done[%s]: %v\n", outputFile, time.Since(start))
 }
 
@@ -128,13 +139,6 @@ func readFlag() {
 	inputDir = *inputDirFlag
 }
 
-func makeOutputDir() {
-	if err := os.Chdir(inputDir); err != nil {
-		log.Fatal("Error changing directory:", err)
-	}
-	os.Mkdir("output", 0777)
-}
-
 func changeStdOut() (*os.File, error) {
 	resultFilePath := fmt.Sprintf("./output/result_%s.txt", time.Now().Format("0102_150405"))
 	if resultFile, err := os.Create(resultFilePath); err != nil {
@@ -143,4 +147,28 @@ func changeStdOut() (*os.File, error) {
 		os.Stdout = resultFile
 		return resultFile, nil
 	}
+}
+
+func getOutputDir(fullPath string) string {
+	re := regexp.MustCompile(`^(.*)\/\d+.mp4$`)
+	match := re.FindStringSubmatch(fullPath)
+	return match[1]
+}
+
+func removeAll(path string) error {
+	files, err := filepath.Glob(filepath.Join(path, "*"))
+	if err != nil {
+		return err
+	}
+
+	for _, f := range files {
+		if err := os.RemoveAll(f); err != nil {
+			return err
+		}
+	}
+
+	if err := os.Remove(path); err != nil {
+		return err
+	}
+	return nil
 }
