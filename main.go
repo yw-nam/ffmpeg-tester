@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -138,12 +139,12 @@ func encoding(option string, outputFile string, wg *sync.WaitGroup) {
 	log.Println(option)
 
 	start := time.Now()
-	// cmd := exec.Command("ffmpeg", strings.Split(option, " ")...)
-	// output, err := cmd.CombinedOutput()
-	// if err != nil {
-	// 	log.Printf("Command failed with error: %s\n", err)
-	// 	log.Fatalf("Output:\n%s", string(output))
-	// }
+	cmd := exec.Command("ffmpeg", strings.Split(option, " ")...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Command failed with error: %s\n", err)
+		log.Fatalf("Output:\n%s", string(output))
+	}
 	fmt.Printf("done[%s]: %v\n", outputFile, time.Since(start))
 }
 
