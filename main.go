@@ -26,7 +26,7 @@ func swOptFmt(bitrate int) string {
 
 func hwOptFmt(bitrate int, gpuId int) string {
 	if bitrate == 4 {
-		return fmt.Sprintf("-y -hwaccel cuda -hwaccel_output_format cuda -i %%s -c:v h264_nvenc -b:v %dM -maxrate:v %dM -bufsize %dM -preset p6 -rc cbr -gpu %d -pix_fmt yuv420p -c:a aac -b:a 96k -movflags faststart %%s", bitrate, bitrate, bitrate*2, gpuId)
+		return fmt.Sprintf("-y -hwaccel cuda -hwaccel_output_format cuda -i %%s -c:v h264_nvenc -b:v %dM -maxrate:v %dM -bufsize %dM -preset p6 -rc cbr -gpu %d -vf scale_cuda=format=yuv420p -c:a aac -b:a 96k -movflags faststart %%s", bitrate, bitrate, bitrate*2, gpuId)
 	}
 	return fmt.Sprintf("-y -hwaccel cuda -hwaccel_output_format cuda -i %%s -c:v h264_nvenc -b:v %dM -maxrate:v %dM -bufsize %dM -preset p6 -rc cbr -gpu %d -c:a aac -b:a 96k -movflags faststart %%s", bitrate, bitrate, bitrate*2, gpuId)
 }
@@ -47,8 +47,8 @@ func (tc *testCase) getTitle() string {
 
 func makeCases() []testCase {
 	result := []testCase{}
-	for _, bitrate := range []int{1, 2, 4} {
-		for _, gpuNum := range []int{1, 2, 0} {
+	for _, bitrate := range []int{4} {
+		for _, gpuNum := range []int{2, 0} {
 			setNums := []int{}
 			switch gpuNum {
 			case 0:
