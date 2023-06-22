@@ -1,0 +1,65 @@
+=== [err: out of memory]  === === === === === === === === ===
+    * 현상: 3개 이상 동시 진행이 안 됨
+    * 에러 로그...
+        2023/06/19 06:50:45 -y -i 720p-EARTH.mp4 -c:v h264_nvenc -b:v 1M -maxrate:v 1M -bufsize 2M -preset p6 -rc cbr -gpu 0 -c:a aac -b:a 96k -movflags faststart ./output_720p-EARTH/h264_nvenc_1M_04ea_1gpu_02.mp4
+        2023/06/19 06:50:45 Command failed with error: exit status 1
+        2023/06/19 06:50:45 Output:
+        ffmpeg version n6.0-11-g3980415627 Copyright (c) 2000-2023 the FFmpeg developers
+        built with gcc 11 (Ubuntu 11.3.0-1ubuntu1~22.04)
+        configuration: --pkg-config-flags=--static --enable-gpl --disable-ffplay --disable-ffprobe --enable-libmp3lame --enable-libtheora --enable-libvorbis --enable-libvpx --enable-libx264 --enable-libx265 --enable-libxvid --enable-libwebp --enable-libfdk_aac --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libvidstab --enable-version3 --enable-nonfree --enable-ffnvcodec --enable-nvenc --enable-libaom --enable-cuda-nvcc --enable-libnpp --enable-cuda
+        libavutil      58.  2.100 / 58.  2.100
+        libavcodec     60.  3.100 / 60.  3.100
+        libavformat    60.  3.100 / 60.  3.100
+        libavdevice    60.  1.100 / 60.  1.100
+        libavfilter     9.  3.100 /  9.  3.100
+        libswscale      7.  1.100 /  7.  1.100
+        libswresample   4. 10.100 /  4. 10.100
+        libpostproc    57.  1.100 / 57.  1.100
+        Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '720p-EARTH.mp4':
+        Metadata:
+            major_brand     : mp42
+            minor_version   : 0
+            compatible_brands: isommp42
+            creation_time   : 2023-03-27T20:02:43.000000Z
+        Duration: 00:30:18.24, start: 0.000000, bitrate: 1138 kb/s
+        Stream #0:0[0x1](und): Video: h264 (Main) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 1280x720 [SAR 1:1 DAR 16:9], 1006 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+            Metadata:
+            creation_time   : 2023-03-27T20:02:43.000000Z
+            handler_name    : ISO Media file produced by Google Inc. Created on: 03/27/2023.
+            vendor_id       : [0][0][0][0]
+        Stream #0:1[0x2](eng): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 127 kb/s (default)
+            Metadata:
+            creation_time   : 2023-03-27T20:02:43.000000Z
+            handler_name    : ISO Media file produced by Google Inc. Created on: 03/27/2023.
+            vendor_id       : [0][0][0][0]
+        Stream mapping:
+        Stream #0:0 -> #0:0 (h264 (native) -> h264 (h264_nvenc))
+        Stream #0:1 -> #0:1 (aac (native) -> aac (native))
+        Press [q] to stop, [?] for help
+        [h264_nvenc @ 0x5614b3d7aa80] OpenEncodeSessionEx failed: out of memory (10): (no details)
+        [h264_nvenc @ 0x5614b3d7aa80] No capable devices found
+        [vost#0:0/h264_nvenc @ 0x5614b3ca7440] Error initializing output stream: Error while opening encoder for output stream #0:0 - maybe incorrect parameters such as bit_rate, rate, width or height
+        [aac @ 0x5614b3d7ebc0] Qavg: 13956.822
+        [aac @ 0x5614b3d7ebc0] 2 frames left in the queue on closing
+        Conversion failed!
+        exit status 1
+
+    >>> [WIKI] https://catenoid-wiki.atlassian.net/wiki/spaces/mp/pages/322338950/AV1+encoding+-+2023-03-28+AV1#동시-문제-해결
+        --> nvida-smi 로 버전 확인해서, https://github.com/keylase/nvidia-patch 요기서 해당 버전 패치 찾아서, 다운 후 run
+        ---> 설치 중 에러... 
+        -----> 같이 있는 sh를 실행해줘야 했었다고 한다!! thanks to 팀장님!
+=== === === === === === === === === === === === === === === ===
+
+=== [err: 10 bit encode not supported]  === === === === === ===
+    [명령]
+        ffmpeg -y -i ./testdata/2160p-color.mp4 -c:v h264_nvenc -b:v 4M -maxrate:v 4M -bufsize 8M -preset p6 -rc cbr -gpu 0 -c:a aac -b:a 96k -movflags faststart ./testdata/output_0000.mp4
+    [에러]
+        [h264_nvenc @ 0x55b5992f3380] 10 bit encode not supported
+        [h264_nvenc @ 0x55b5992f3380] No capable devices found
+        [vost#0:0/h264_nvenc @ 0x55dc3e05f1c0] Error initializing output stream: Error while opening encoder for output stream #0:0 - maybe incorrect parameters such as bit_rate, rate, width or height
+        Conversion failed!
+    [해결]
+        -pix_fmt yuv420p 추가 하여 해결!
+        --> 4M 에서 또 에러..
+        ----> -vf scale_cuda=format=yuv420p 추가하여 해결! (pix_fmt는 제거)
+=== === === === === === === === === === === === === === === ===
